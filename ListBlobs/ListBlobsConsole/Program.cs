@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 
 namespace ListBlobsConsole
@@ -48,6 +49,8 @@ namespace ListBlobsConsole
             string sasToken,
             string targetUrl)
         {
+            //ServicePointManager.DefaultConnectionLimit = ?;
+
             using (var stream = await GetTargetStreamAsync(targetUrl))
             {
                 var writer = stream == null
