@@ -22,8 +22,8 @@ WORKDIR /work
 COPY --from=build /src/app .
 
 #	Define environment variables
-ENV BLOB-DIR ""
-ENV SAS-TOKEN ""
+ENV BLOB_DIR ""
+ENV SAS_TOKEN ""
 
 #	Run console app
 CMD ["dotnet", "ListBlobsConsole.dll"]

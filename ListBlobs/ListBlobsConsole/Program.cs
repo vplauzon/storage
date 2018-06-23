@@ -10,24 +10,24 @@ namespace ListBlobsConsole
     {
         static void Main(string[] args)
         {
-            var blobDir = Environment.GetEnvironmentVariable("BLOB-DIR");
-            var sasToken = Environment.GetEnvironmentVariable("SAS-TOKEN");
+            var blobDir = Environment.GetEnvironmentVariable("BLOB_DIR");
+            var sasToken = Environment.GetEnvironmentVariable("SAS_TOKEN");
 
-            Console.WriteLine($"BLOB-DIR:  {blobDir}");
-            Console.WriteLine($"SAS-TOKEN:  {sasToken}");
+            Console.WriteLine($"BLOB_DIR:  {blobDir}");
+            Console.WriteLine($"SAS_TOKEN:  {sasToken}");
             Console.WriteLine();
 
             if (string.IsNullOrWhiteSpace(blobDir))
             {
-                Console.WriteLine("Missing BLOB-DIR environment variable");
+                Console.WriteLine("Missing BLOB_DIR environment variable");
             }
             else if (blobDir.Split('/').Length < 4)
             {
-                Console.WriteLine("BLOB-DIR doesn't point to at least a container");
+                Console.WriteLine("BLOB_DIR doesn't point to at least a container");
             }
             else if (string.IsNullOrWhiteSpace(sasToken))
             {
-                Console.WriteLine("Missing SAS-TOKEN environment variable");
+                Console.WriteLine("Missing SAS_TOKEN environment variable");
             }
             else
             {
