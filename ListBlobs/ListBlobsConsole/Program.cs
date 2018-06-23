@@ -9,16 +9,16 @@ namespace ListBlobsConsole
     {
         static void Main(string[] args)
         {
-            var dir = new Uri(Environment.GetEnvironmentVariable("DIR"));
+            var blobDir = new Uri(Environment.GetEnvironmentVariable("BLOB-DIR"));
             var sasToken = Environment.GetEnvironmentVariable("SAS-TOKEN");
 
-            MainAsync(dir, sasToken).Wait();
+            MainAsync(blobDir, sasToken).Wait();
         }
 
-        private static async Task MainAsync(Uri dir, string sasToken)
+        private static async Task MainAsync(Uri blobDir, string sasToken)
         {
             var storageCreds = new StorageCredentials(sasToken);
-            var container = new CloudBlobContainer(dir, storageCreds);
+            var container = new CloudBlobContainer(blobDir, storageCreds);
             BlobContinuationToken continuationToken = null;
 
             do
