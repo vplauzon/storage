@@ -25,7 +25,7 @@ namespace Xml2JsonConsole
             {
                 var segment = await container.ListBlobsSegmentedAsync(
                     "Partitioned_xmlFiles/",
-                    false,
+                    true,
                     BlobListingDetails.Metadata,
                     null,
                     continuationToken,
