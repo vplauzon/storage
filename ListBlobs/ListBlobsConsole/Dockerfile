@@ -24,6 +24,7 @@ COPY --from=build /src/app .
 #	Define environment variables
 ENV BLOB_DIR ""
 ENV SAS_TOKEN ""
+ENV TARGET_URL ""
 
 #	Run console app
 CMD ["dotnet", "ListBlobsConsole.dll"]

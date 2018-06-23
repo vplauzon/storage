@@ -1,6 +1,7 @@
 ﻿using Microsoft.WindowsAzure.Storage.Auth;
 using Microsoft.WindowsAzure.Storage.Blob;
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -12,9 +13,11 @@ namespace ListBlobsConsole
         {
             var blobDir = Environment.GetEnvironmentVariable("BLOB_DIR");
             var sasToken = Environment.GetEnvironmentVariable("SAS_TOKEN");
+            var targetUrl = Environment.GetEnvironmentVariable("TARGET_URL");
 
             Console.WriteLine($"BLOB_DIR:  {blobDir}");
             Console.WriteLine($"SAS_TOKEN:  {sasToken}");
+            Console.WriteLine($"TARGET_URL:  {targetUrl}");
             Console.WriteLine();
 
             if (string.IsNullOrWhiteSpace(blobDir))
@@ -35,34 +38,60 @@ namespace ListBlobsConsole
                 var containerUri = new Uri(string.Join('/', split.Take(4)));
                 var folderPath = string.Join('/', split.Skip(4));
 
-                MainAsync(containerUri, folderPath, sasToken).Wait();
+                MainAsync(containerUri, folderPath, sasToken, targetUrl).Wait();
             }
         }
 
-        private static async Task MainAsync(Uri containerUri, string folderPath, string sasToken)
+        private static async Task MainAsync(
+            Uri containerUri,
+            string folderPath,
+            string sasToken,
+            string targetUrl)
         {
-            var storageCreds = new StorageCredentials(sasToken);
-            var container = new CloudBlobContainer(containerUri, storageCreds);
-            var folder = container.GetDirectoryReference(folderPath);
-            BlobContinuationToken continuationToken = null;
-
-            do
+            using (var stream = await GetTargetStreamAsync(targetUrl))
             {
-                var segment = await folder.ListBlobsSegmentedAsync(
-                    true,
-                    BlobListingDetails.None,
-                    null,
-                    continuationToken,
-                    null,
-                    null);
+                var writer = stream == null
+                    ? Console.Out
+                    : new StreamWriter(stream);
+                var storageCreds = new StorageCredentials(sasToken);
+                var container = new CloudBlobContainer(containerUri, storageCreds);
+                var folder = container.GetDirectoryReference(folderPath);
+                BlobContinuationToken continuationToken = null;
 
-                foreach (var i in segment.Results)
+                do
                 {
-                    Console.WriteLine(i.Uri);
+                    var segment = await folder.ListBlobsSegmentedAsync(
+                        true,
+                        BlobListingDetails.None,
+                        null,
+                        continuationToken,
+                        null,
+                        null);
+
+                    foreach (var i in segment.Results)
+                    {
+                        writer.WriteLine(i.Uri);
+                    }
+                    continuationToken = segment.ContinuationToken;
                 }
-                continuationToken = segment.ContinuationToken;
+                while (continuationToken != null);
+                await writer.FlushAsync();
             }
-            while (continuationToken != null);
+        }
+
+        private static async Task<Stream> GetTargetStreamAsync(string targetUrl)
+        {
+            if (string.IsNullOrWhiteSpace(targetUrl))
+            {
+                return null;
+            }
+            else
+            {
+                var blob = new CloudBlockBlob(new Uri(targetUrl));
+                var stream = await blob.OpenWriteAsync();
+
+                return stream;
+            }
         }
     }
 }
