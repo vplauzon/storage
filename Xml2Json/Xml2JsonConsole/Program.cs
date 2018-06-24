@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using System.Xml;
 
@@ -87,6 +88,8 @@ namespace Xml2JsonConsole
             var total = blobPaths.Count();
             var progressClip = Math.Max(1, total / 100);
 
+            //  Increase number of parallel connections to identical Domain Name
+            ServicePointManager.DefaultConnectionLimit = parallelism;
             while (blobPaths.Any() || transformTasks.Any())
             {   //  Consider adding a new task
                 if (transformTasks.Count() < parallelism && blobPaths.Any())
@@ -143,10 +146,12 @@ namespace Xml2JsonConsole
         private static (string jsonText, string message) GetJsonText(string xmlText)
         {
             var doc = new XmlDocument();
+            var closingIndex = xmlText.LastIndexOf('>');
+            var truncatedText = xmlText.Substring(0, closingIndex + 1);
 
             try
             {
-                doc.LoadXml(xmlText);
+                doc.LoadXml(truncatedText);
 
                 var jsonText = JsonConvert.SerializeXmlNode(doc);
 
