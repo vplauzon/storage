@@ -81,6 +81,9 @@ namespace Xml2JsonConsole
             var total = blobPaths.Count();
             var progressClip = Math.Max(1, total / 100);
 
+            Console.WriteLine($"# of blobs:  {total}");
+            Console.WriteLine("Starting to convert...");
+            Console.WriteLine();
             //  Increase number of parallel connections to identical Domain Name
             ServicePointManager.DefaultConnectionLimit = parallelism;
             while (blobPaths.Any() || transformTasks.Any())
