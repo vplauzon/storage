@@ -14,13 +14,6 @@ namespace Xml2JsonConsole
     {
         static void Main(string[] args)
         {
-            //    "BLOB_LIST_URL": "https://acpavimport.blob.core.windows.net/xmlfiles/xml-file-list.txt?st=2018-06-23T20%3A00%3A32Z&se=2018-06-24T20%3A00%3A32Z&sp=r&sv=2017-07-29&sr=b&sig=5ZcnHmSc45sm%2F5DgDo%2FEXc%2FZOpJttw9x%2BRYBeS5Zym8%3D",
-            //"SPLIT_COUNT": "3",
-            //"SPLIT_INDEX": "1",
-            //"SAS-TOKEN": "?st=2018-06-23T20%3A01%3A13Z&se=2018-06-24T20%3A01%3A13Z&sp=r&sv=2017-07-29&sr=c&sig=Z8jF%2FWlGfbRFumW6oNYTFroZnBrJFsTzH2e%2F0gBkZ%2Bk%3D",
-            //"TARGET_CONTAINER": "https://acpavimport.blob.core.windows.net/json-files?st=2018-06-23T20%3A02%3A29Z&se=2018-06-24T20%3A02%3A29Z&sp=w&sv=2017-07-29&sr=c&sig=7dUU%2BABwtyuBaJXhnKUkVL%2B%2BVi%2FtCr%2BFc%2Bwx9deyhQk%3D",
-            //"PARALLELISM": "20"
-
             var blobListUrl = Environment.GetEnvironmentVariable("BLOB_LIST_URL");
             var splitCount = Environment.GetEnvironmentVariable("SPLIT_COUNT");
             var splitIndex = Environment.GetEnvironmentVariable("SPLIT_INDEX");
