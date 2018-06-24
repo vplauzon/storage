@@ -3,6 +3,7 @@ using Microsoft.WindowsAzure.Storage.Blob;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
@@ -165,13 +166,27 @@ namespace Xml2JsonConsole
             int splitIndex)
         {
             var listBlob = new CloudBlockBlob(blobListUri);
-            var text = await listBlob.DownloadTextAsync();
-            var allLines = text.Split(Environment.NewLine);
-            var firstLine = splitIndex * allLines.Length / splitCount;
-            var afterLastLine = (splitIndex + 1) * allLines.Length / splitCount;
-            var lines = allLines.Skip(firstLine).Take(afterLastLine - firstLine).ToArray();
 
-            return new Stack<string>(lines.Reverse());
+            using (var stream = await listBlob.OpenReadAsync())
+            using (var reader = new StreamReader(stream))
+            {
+                var allLines = new List<string>();
+
+                while (!reader.EndOfStream)
+                {
+                    var line = await reader.ReadLineAsync();
+
+                    if (line != null)
+                    {
+                        allLines.Add(line);
+                    }
+                }
+                var firstLine = splitIndex * allLines.Count() / splitCount;
+                var afterLastLine = (splitIndex + 1) * allLines.Count() / splitCount;
+                var lines = allLines.Skip(firstLine).Take(afterLastLine - firstLine);
+
+                return new Stack<string>(lines.Reverse());
+            }
         }
     }
 }
