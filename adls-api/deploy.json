@@ -10,7 +10,10 @@
     }
   },
   "variables": {
-    "Test App Name": "test-adls-api-app"
+    "List App Name": "list-adls-api-app",
+    "Create File Systems App Name": "create-file-systems-adls-api-app",
+    "Storage Blob Data Contributor Role": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+    "Storage Role Assignment Name": "[concat(parameters('storageAccountName'), '/Microsoft.Authorization/', guid(concat(resourceGroup().id), variables('Storage Blob Data Contributor Role')))]"
   },
   "resources": [
     {
@@ -30,7 +33,104 @@
       "resources": []
     },
     {
-      "name": "[variables('Test App Name')]",
+      "name": "[variables('Create File Systems App Name')]",
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [],
+      "tags": {},
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "create-red": {
+              "inputs": {
+                "authentication": {
+                  "audience": "https://storage.azure.com",
+                  "type": "ManagedServiceIdentity"
+                },
+                "headers": {
+                  "x-ms-version": "2018-11-09"
+                },
+                "method": "PUT",
+                "retryPolicy": {
+                  "type": "none"
+                },
+                "uri": "https://@{parameters('storageAccountName')}.dfs.core.windows.net/red?resource=filesystem"
+              },
+              "runAfter": {},
+              "type": "Http"
+            },
+            "create-blue": {
+              "inputs": {
+                "authentication": {
+                  "audience": "https://storage.azure.com",
+                  "type": "ManagedServiceIdentity"
+                },
+                "headers": {
+                  "x-ms-version": "2018-11-09"
+                },
+                "method": "PUT",
+                "retryPolicy": {
+                  "type": "none"
+                },
+                "uri": "https://@{parameters('storageAccountName')}.dfs.core.windows.net/blue?resource=filesystem"
+              },
+              "runAfter": {},
+              "type": "Http"
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {
+            "storageAccountName": {
+              "type": "string"
+            }
+          },
+          "triggers": {
+            "http-post": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "secret": {
+                      "type": "string",
+                      "required": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "method": "POST"
+              }
+            }
+          }
+        },
+        "parameters": {
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/providers/roleAssignments",
+      "apiVersion": "2018-01-01-preview",
+      "name": "[variables('Storage Role Assignment Name')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Logic/workflows', variables('Create File Systems App Name'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storageAccountName'))]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('Storage Blob Data Contributor Role')]",
+        "principalId": "[reference(resourceId('Microsoft.Logic/workflows', variables('Create File Systems App Name')), '2017-07-01', 'Full').identity.principalId]"
+      }
+    },
+    {
+      "name": "[variables('List App Name')]",
       "type": "Microsoft.Logic/workflows",
       "apiVersion": "2017-07-01",
       "location": "[resourceGroup().location]",
@@ -117,7 +217,7 @@
   "outputs": {
     "Managed Identity Object ID": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Logic/workflows', variables('Test App Name')), '2017-07-01', 'Full').identity.principalId]"
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', variables('List App Name')), '2017-07-01', 'Full').identity.principalId]"
     }
   }
 }
