@@ -1,0 +1,123 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "storageAccountName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the storage account ; must be unique"
+      }
+    }
+  },
+  "variables": {
+    "Test App Name": "test-adls-api-app"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2019-04-01",
+      "name": "[parameters('storageAccountName')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [],
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "isHnsEnabled": true
+      },
+      "resources": []
+    },
+    {
+      "name": "[variables('Test App Name')]",
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [],
+      "tags": {},
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "list-a": {
+              "inputs": {
+                "authentication": {
+                  "audience": "https://storage.azure.com",
+                  "type": "ManagedServiceIdentity"
+                },
+                "headers": {
+                  "x-ms-version": "2018-11-09"
+                },
+                "method": "GET",
+                "retryPolicy": {
+                  "type": "none"
+                },
+                "uri": "https://vpladls.dfs.core.windows.net/a?directory=%2F&recursive=false&resource=filesystem"
+              },
+              "runAfter": {},
+              "type": "Http"
+            },
+            "list-b": {
+              "inputs": {
+                "authentication": {
+                  "audience": "https://storage.azure.com",
+                  "type": "ManagedServiceIdentity"
+                },
+                "headers": {
+                  "x-ms-version": "2018-11-09"
+                },
+                "method": "GET",
+                "retryPolicy": {
+                  "type": "none"
+                },
+                "uri": "https://vpladls.dfs.core.windows.net/b?directory=%2F&recursive=false&resource=filesystem"
+              },
+              "runAfter": {},
+              "type": "Http"
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {
+            "storageAccountName": {
+              "type": "string"
+            }
+          },
+          "triggers": {
+            "http-post": {
+              "type": "Request",
+              "kind": "Http",
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "secret": {
+                      "type": "string",
+                      "required": true
+                    }
+                  },
+                  "type": "object"
+                },
+                "method": "POST"
+              }
+            }
+          }
+        },
+        "parameters": {
+          "storageAccountName": {
+            "value": "[parameters('storageAccountName')]"
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "Managed Identity Object ID": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', variables('Test App Name')), '2017-07-01', 'Full').identity.principalId]"
+    }
+  }
+}
