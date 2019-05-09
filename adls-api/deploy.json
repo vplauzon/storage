@@ -143,7 +143,7 @@
         "definition": {
           "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
           "actions": {
-            "list-a": {
+            "list-red": {
               "inputs": {
                 "authentication": {
                   "audience": "https://storage.azure.com",
@@ -156,12 +156,12 @@
                 "retryPolicy": {
                   "type": "none"
                 },
-                "uri": "https://vpladls.dfs.core.windows.net/a?directory=%2F&recursive=false&resource=filesystem"
+                "uri": "https://@{parameters('storageAccountName')}.dfs.core.windows.net/red?directory=%2F&recursive=false&resource=filesystem"
               },
               "runAfter": {},
               "type": "Http"
             },
-            "list-b": {
+            "list-blue": {
               "inputs": {
                 "authentication": {
                   "audience": "https://storage.azure.com",
@@ -174,7 +174,7 @@
                 "retryPolicy": {
                   "type": "none"
                 },
-                "uri": "https://vpladls.dfs.core.windows.net/b?directory=%2F&recursive=false&resource=filesystem"
+                "uri": "https://@{parameters('storageAccountName')}.dfs.core.windows.net/blue?directory=%2F&recursive=false&resource=filesystem"
               },
               "runAfter": {},
               "type": "Http"
