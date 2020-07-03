@@ -24,10 +24,7 @@
       "identity": {
         "type": "UserAssigned",
         "userAssignedIdentities": {
-          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]": {
-            "principalId": "[reference(variables('Identity Name'), '2018-11-30').principalId]",
-            "clientId": "[reference(variables('Identity Name'), '2018-11-30').clientId]"
-          }
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]": {}
         }
       },
       "properties": {
