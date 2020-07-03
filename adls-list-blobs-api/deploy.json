@@ -236,45 +236,25 @@
                     "value": "@{outputs('data-lake-list')['headers']?['x-ms-continuation']}"
                   }
                 },
-                "if-call-occured": {
-                  "actions": {
-                    "set-failure-error": {
-                      "inputs": {
-                        "name": "error",
-                        "value": {
-                          "noHttpCall": "HTTP call to storage API didn't occur.  Possible cause:  User Assigned Identity doesn't have access."
-                        }
-                      },
-                      "runAfter": {},
-                      "type": "SetVariable"
-                    }
-                  },
-                  "else": {
-                    "actions": {
-                      "set-http-error": {
-                        "inputs": {
-                          "name": "error",
-                          "value": {
-                            "innerError": {
-                              "body": "@body('data-lake-list')",
-                              "code": "@outputs('data-lake-list')['statusCode']",
-                              "headers": "@outputs('data-lake-list')['headers']"
-                            }
-                          }
-                        },
-                        "runAfter": {},
-                        "type": "SetVariable"
+                "set-http-error": {
+                  "inputs": {
+                    "name": "error",
+                    "value": {
+                      "innerError": {
+                        "body": "@body('data-lake-list')",
+                        "code": "@outputs('data-lake-list')['statusCode']",
+                        "headers": "@outputs('data-lake-list')['headers']"
                       }
                     }
                   },
-                  "expression": "@equals('', coalesce(outputs('data-lake-list'), ''))",
                   "runAfter": {
                     "data-lake-list": [
                       "Failed",
                       "TimedOut"
                     ]
+
                   },
-                  "type": "If"
+                  "type": "SetVariable"
                 },
                 "set-paths": {
                   "runAfter": {
