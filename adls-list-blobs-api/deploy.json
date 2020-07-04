@@ -140,7 +140,7 @@
                   }
                 }
               },
-              "expression": "@not(triggerBody()?['doListDirectories'])",
+              "expression": "@triggerBody()?['doListDirectories']",
               "type": "If"
             },
             "init-continuation": {
