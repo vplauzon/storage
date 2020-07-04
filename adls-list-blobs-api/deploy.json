@@ -140,16 +140,7 @@
                   }
                 }
               },
-              "expression": {
-                "and": [
-                  {
-                    "equals": [
-                      "@triggerBody()?['doListDirectories']",
-                      true
-                    ]
-                  }
-                ]
-              },
+              "expression": "@not(triggerBody()?['doListDirectories'])",
               "type": "If"
             },
             "init-continuation": {
@@ -268,14 +259,26 @@
                     "value": "@outputs('union-paths')"
                   }
                 },
-                "union-paths": {
+                "filter-suffix": {
+                  "inputs": {
+                    "from": "@body('data-lake-list').paths",
+                    "where": "@or(equals(item()?['isDirectory'], 'true'), endswith(item().name, coalesce(triggerBody()?['suffix'], '')))"
+                  },
                   "runAfter": {
                     "set-continuation": [
                       "Succeeded"
                     ]
                   },
-                  "type": "Compose",
-                  "inputs": "@union(variables('paths'), body('data-lake-list').paths)"
+                  "type": "Query"
+                },
+                "union-paths": {
+                  "inputs": "@union(variables('paths'), body('filter-suffix'))",
+                  "runAfter": {
+                    "filter-suffix": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "Compose"
                 },
                 "with-continuation": {
                   "runAfter": {},
