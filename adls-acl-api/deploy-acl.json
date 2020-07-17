@@ -1,0 +1,225 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "variables": {
+    "Unique ID": "[uniqueString(concat(resourceGroup().id, 'list-blobs-api'))]",
+    "Identity Name": "[concat('data-lake-identity-', variables('Unique ID'))]",
+    "Get ACL Name": "[concat('get-acl-api-', variables('Unique ID'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "name": "[variables('Identity Name')]",
+      "apiVersion": "2018-11-30",
+      "location": "[resourceGroup().location]"
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[variables('Get ACL Name')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]"
+      ],
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]": {}
+        }
+      },
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "acls": {
+              "inputs": "@split(outputs('data-lake-list').headers['x-ms-acl'], ',')",
+              "runAfter": {
+                "data-lake-list": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose"
+            },
+            "split-colons": {
+              "inputs": {
+                "from": "@outputs('acls')",
+                "select": "@split(item(), ':')"
+              },
+              "runAfter": {
+                "acls": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select"
+            },
+            "data-lake-list": {
+              "inputs": {
+                "authentication": {
+                  "audience": "https://storage.azure.com",
+                  "identity": "/subscriptions/a9f15356-c7b1-4864-980e-e9bca8b790dd/resourceGroups/test2/providers/Microsoft.ManagedIdentity/userAssignedIdentities/data-lake-identity-lnz2qux2mocos",
+                  "type": "ManagedServiceIdentity"
+                },
+                "headers": {
+                  "x-ms-version": "2019-07-07"
+                },
+                "method": "HEAD",
+                "uri": "@{outputs('url')}"
+              },
+              "runAfter": {
+                "url": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Http"
+            },
+            "default-acl": {
+              "inputs": {
+                "from": "@body('split-colons')",
+                "where": "@equals(item()[0], 'default')"
+              },
+              "runAfter": {
+                "split-colons": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query"
+            },
+            "non-default-acl": {
+              "inputs": {
+                "from": "@body('split-colons')",
+                "where": "@not(equals(item()[0], 'default'))"
+              },
+              "runAfter": {
+                "split-colons": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Query"
+            },
+            "response-failure": {
+              "inputs": {
+                "statusCode": 500
+              },
+              "kind": "Http",
+              "runAfter": {
+                "data-lake-list": [
+                  "Failed"
+                ]
+              },
+              "type": "Response"
+            },
+            "response-success": {
+              "inputs": {
+                "body": {
+                  "acl": {
+                    "raw": "@{outputs('data-lake-list')['headers']['x-ms-acl']}",
+                    "structured": {
+                      "access": "@body('select-non-default-acl')",
+                      "default": "@body('select-default-acl')"
+                    }
+                  },
+                  "group": "@{outputs('data-lake-list')['headers']['x-ms-group']}",
+                  "owner": "@{outputs('data-lake-list')['headers']['x-ms-owner']}",
+                  "permissions": "@{outputs('data-lake-list')['headers']['x-ms-permissions']}"
+                },
+                "statusCode": 200
+              },
+              "kind": "Http",
+              "runAfter": {
+                "select-default-acl": [
+                  "Succeeded"
+                ],
+                "select-non-default-acl": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Response"
+            },
+            "select-default-acl": {
+              "inputs": {
+                "from": "@body('default-acl')",
+                "select": {
+                  "permissions": "@item()[3]",
+                  "principal": "@item()[2]",
+                  "principalType": "@item()[1]"
+                }
+              },
+              "runAfter": {
+                "default-acl": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select"
+            },
+            "select-non-default-acl": {
+              "inputs": {
+                "from": "@body('non-default-acl')",
+                "select": {
+                  "permissions": "@item()[2]",
+                  "principal": "@item()[1]",
+                  "principalType": "@item()[0]"
+                }
+              },
+              "runAfter": {
+                "non-default-acl": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Select"
+            },
+            "url": {
+              "inputs": "https://@{triggerBody()['storageAccount']}.dfs.core.windows.net/@{triggerBody()['container']}/@{triggerBody()?['path']}?action=getAccessControl&upn=@{coalesce(triggerBody()?['upn'], false)}",
+              "runAfter": {},
+              "type": "Compose"
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "container": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "storageAccount": {
+                      "type": "string"
+                    },
+                    "upn": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "storageAccount",
+                    "container",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "kind": "Http",
+              "operationOptions": "EnableSchemaValidation",
+              "type": "Request"
+            }
+          }
+        },
+        "parameters": {}
+      }
+    }
+  ],
+  "outputs": {
+    "id": {
+      "type": "object",
+      "value": "[reference(variables('Identity Name'), '2018-11-30')]"
+    },
+    "id2": {
+      "type": "string",
+      "value": "[reference(variables('Identity Name'), '2018-11-30').principalId]"
+    }
+  }
+}
