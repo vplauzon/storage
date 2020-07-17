@@ -98,7 +98,9 @@
             },
             "response-failure": {
               "inputs": {
-                "statusCode": 500
+                "body": "@coalesce(body('data-lake-list'), 'API failed')",
+                "headers": {},
+                "statusCode": "@coalesce(outputs('data-lake-list')['statusCode'], 500)"
               },
               "kind": "Http",
               "runAfter": {
