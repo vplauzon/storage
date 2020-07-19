@@ -5,7 +5,8 @@
     "Unique ID": "[uniqueString(concat(resourceGroup().id, 'adls-acl-api'))]",
     "Identity Name": "[concat('data-lake-identity-', variables('Unique ID'))]",
     "Get ACL Name": "[concat('get-acl-api-', variables('Unique ID'))]",
-    "List Blobs Name": "[concat('list-blobs-api-', variables('Unique ID'))]"
+    "List Blobs Name": "[concat('list-blobs-api-', variables('Unique ID'))]",
+    "Patch ACL Name": "[concat('patch-acl-api-', variables('Unique ID'))]"
   },
   "resources": [
     {
@@ -510,6 +511,453 @@
             }
           },
           "outputs": {}
+        },
+        "parameters": {}
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2017-07-01",
+      "name": "[variables('Patch ACL Name')]",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]",
+        "[resourceId('Microsoft.Logic/workflows', variables('Get ACL Name'))]",
+        "[resourceId('Microsoft.Logic/workflows', variables('List Blobs Name'))]"
+      ],
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]": {}
+        }
+      },
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "actions": {
+            "blobs-to-patch": {
+              "inputs": "@if(or(outputs('isDefault'), not(outputs('hasBlobAce'))), outputs('emptySet'), body('list-blobs').blobs)",
+              "runAfter": {
+                "emptySet": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose"
+            },
+            "directories-to-patch": {
+              "inputs": "@if(and(not(outputs('hasDirectoryAce')), not(outputs('isFlushing'))), outputs('emptySet'), union(body('list-blobs').directories, outputs('root-directory')))",
+              "runAfter": {
+                "root-directory": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose"
+            },
+            "emptySet": {
+              "inputs": [],
+              "runAfter": {
+                "list-blobs": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose"
+            },
+            "for-each-object": {
+              "actions": {
+                "if-flushing": {
+                  "actions": {
+                    "filter-out-all-ids": {
+                      "inputs": {
+                        "from": "@if(outputs('isDefault'), body('get-acl-with-ids').acl.structured.default, body('get-acl-with-ids').acl.structured.access)",
+                        "where": "@equals(item()['id'], '')"
+                      },
+                      "runAfter": {
+                        "get-acl-with-ids": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Query"
+                    },
+                    "get-acl-with-ids": {
+                      "inputs": {
+                        "body": {
+                          "container": "@triggerBody()['container']",
+                          "path": "@{item().name}",
+                          "storageAccount": "@triggerBody()['storageAccount']",
+                          "upn": "@outputs('upn')"
+                        },
+                        "host": {
+                          "triggerName": "manual",
+                          "workflow": {
+                            "id": "[resourceId('Microsoft.Logic/workflows', variables('Get ACL Name'))]"
+                          }
+                        }
+                      },
+                      "runAfter": {},
+                      "type": "Workflow"
+                    },
+                    "map-access-to-string": {
+                      "inputs": {
+                        "from": "@if(outputs('isDefault'), body('get-acl-with-ids').acl.structured.access, body('filter-out-all-ids'))",
+                        "select": "@concat(item().type, ':', item().id, ':', item().permissions)"
+                      },
+                      "runAfter": {
+                        "filter-out-all-ids": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Select"
+                    },
+                    "map-default-to-string": {
+                      "inputs": {
+                        "from": "@if(outputs('isDefault'), body('filter-out-all-ids'), body('get-acl-with-ids').acl.structured.default)",
+                        "select": "@concat('default:', item().type, ':', item().id, ':', item().permissions)"
+                      },
+                      "runAfter": {
+                        "filter-out-all-ids": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Select"
+                    },
+                    "patch-blob-flush": {
+                      "inputs": {
+                        "authentication": {
+                          "audience": "https://storage.azure.com",
+                          "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]",
+                          "type": "ManagedServiceIdentity"
+                        },
+                        "headers": {
+                          "x-ms-acl": "@{join(union(body('map-default-to-string'), body('map-access-to-string')), ',')}",
+                          "x-ms-version": "2019-07-07"
+                        },
+                        "method": "PATCH",
+                        "uri": "https://@{triggerBody()['storageAccount']}.dfs.core.windows.net/@{triggerBody()['container']}/@{item().name}?action=setAccessControl"
+                      },
+                      "runAfter": {
+                        "map-access-to-string": [
+                          "Succeeded"
+                        ],
+                        "map-default-to-string": [
+                          "Succeeded"
+                        ]
+                      },
+                      "type": "Http"
+                    }
+                  },
+                  "else": {
+                    "actions": {
+                      "abc": {
+                        "inputs": "@if(outputs('isDefault'), body('get-acl').acl.structured.access, union(body('filter-out-ace-id'), outputs('ace-to-apply-collection')))",
+                        "runAfter": {
+                          "filter-out-ace-id": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose"
+                      },
+                      "ace-to-apply": {
+                        "inputs": {
+                          "id": "@triggerBody()?['ace']?['id']",
+                          "permissions": "@if(outputs('isDirectory'), triggerBody()?['ace']?['directoryPermissions'], triggerBody()?['ace']?['blobPermissions'])",
+                          "type": "@triggerBody()?['ace']?['type']"
+                        },
+                        "runAfter": {
+                          "get-acl": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose"
+                      },
+                      "ace-to-apply-collection": {
+                        "inputs": [
+                          "@outputs('ace-to-apply')"
+                        ],
+                        "runAfter": {
+                          "ace-to-apply": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Compose"
+                      },
+                      "filter-out-ace-id": {
+                        "inputs": {
+                          "from": "@if(outputs('isDefault'), body('get-acl').acl.structured.default, body('get-acl').acl.structured.access)",
+                          "where": "@not(equals(item()['id'], ''))"
+                        },
+                        "runAfter": {
+                          "ace-to-apply-collection": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Query"
+                      },
+                      "get-acl": {
+                        "inputs": {
+                          "body": {
+                            "container": "@triggerBody()['container']",
+                            "path": "@{item().name}",
+                            "storageAccount": "@triggerBody()['storageAccount']",
+                            "upn": "@outputs('upn')"
+                          },
+                          "host": {
+                            "triggerName": "manual",
+                            "workflow": {
+                              "id": "[resourceId('Microsoft.Logic/workflows', variables('Get ACL Name'))]"
+                            }
+                          }
+                        },
+                        "runAfter": {},
+                        "type": "Workflow"
+                      },
+                      "map-access-to-string-ace": {
+                        "inputs": {
+                          "from": "@if(outputs('isDefault'), body('get-acl').acl.structured.access, union(body('filter-out-ace-id'), outputs('ace-to-apply-collection')))",
+                          "select": "@concat(item()?['type'], ':', item().id, ':', item().permissions)"
+                        },
+                        "runAfter": {
+                          "filter-out-ace-id": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Select"
+                      },
+                      "map-default-to-string-ace": {
+                        "inputs": {
+                          "from": "@if(outputs('isDefault'), union(body('filter-out-ace-id'), outputs('ace-to-apply-collection')), body('get-acl').acl.structured.default)",
+                          "select": "@concat('default:', item().type, ':', item().id, ':', item().permissions)"
+                        },
+                        "runAfter": {
+                          "filter-out-ace-id": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Select"
+                      },
+                      "patch-blob-ace": {
+                        "inputs": {
+                          "authentication": {
+                            "audience": "https://storage.azure.com",
+                            "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('Identity Name'))]",
+                            "type": "ManagedServiceIdentity"
+                          },
+                          "headers": {
+                            "x-ms-acl": "@{join(union(body('map-default-to-string-ace'), body('map-access-to-string-ace')), ',')}",
+                            "x-ms-version": "2019-07-07"
+                          },
+                          "method": "PATCH",
+                          "uri": "https://@{triggerBody()['storageAccount']}.dfs.core.windows.net/@{triggerBody()['container']}/@{item().name}?action=setAccessControl"
+                        },
+                        "runAfter": {
+                          "map-access-to-string-ace": [
+                            "Succeeded"
+                          ],
+                          "map-default-to-string-ace": [
+                            "Succeeded"
+                          ]
+                        },
+                        "type": "Http"
+                      }
+                    }
+                  },
+                  "expression": "@outputs('isFlushing')",
+                  "runAfter": {
+                    "isDirectory": [
+                      "Succeeded"
+                    ]
+                  },
+                  "type": "If"
+                },
+                "isDirectory": {
+                  "inputs": "@equals(item()?['isDirectory'], 'true')",
+                  "runAfter": {},
+                  "type": "Compose"
+                }
+              },
+              "foreach": "@union(outputs('directories-to-patch'), outputs('blobs-to-patch'))",
+              "runAfter": {
+                "blobs-to-patch": [
+                  "Succeeded"
+                ],
+                "directories-to-patch": [
+                  "Succeeded"
+                ]
+              },
+              "runtimeConfiguration": {
+                "concurrency": {
+                  "repetitions": 50
+                }
+              },
+              "type": "Foreach"
+            },
+            "hasBlobAce": {
+              "inputs": "@not(equals(42, coalesce(triggerBody()?['ace']?['blobPermissions'], 42)))",
+              "runAfter": {},
+              "type": "Compose"
+            },
+            "hasDirectoryAce": {
+              "inputs": "@not(equals(42, coalesce(triggerBody()?['ace']?['directoryPermissions'], 42)))",
+              "runAfter": {},
+              "type": "Compose"
+            },
+            "isDefault": {
+              "inputs": "@coalesce(triggerBody()?['isDefault'], false)",
+              "runAfter": {},
+              "type": "Compose"
+            },
+            "isFlushing": {
+              "inputs": "@equals(coalesce(triggerBody()?['ace'], 42), 42)",
+              "runAfter": {},
+              "type": "Compose"
+            },
+            "list-blobs": {
+              "inputs": {
+                "body": {
+                  "container": "@triggerBody()['container']",
+                  "directory": "@triggerBody()['path']",
+                  "doListDirectories": "@triggerBody()?['isRecursive']",
+                  "storageAccount": "@triggerBody()['storageAccount']",
+                  "suffix": "@coalesce(triggerBody()?['suffix'], '')"
+                },
+                "host": {
+                  "triggerName": "manual",
+                  "workflow": {
+                    "id": "[resourceId('Microsoft.Logic/workflows', variables('List Blobs Name'))]"
+                  }
+                }
+              },
+              "runAfter": {
+                "hasBlobAce": [
+                  "Succeeded"
+                ],
+                "hasDirectoryAce": [
+                  "Succeeded"
+                ],
+                "isDefault": [
+                  "Succeeded"
+                ],
+                "isFlushing": [
+                  "Succeeded"
+                ],
+                "upn": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Workflow"
+            },
+            "response-failure-patch-blob": {
+              "inputs": {
+                "body": "Couldn't patch blob",
+                "statusCode": 500
+              },
+              "kind": "Http",
+              "operationOptions": "Asynchronous",
+              "runAfter": {
+                "for-each-object": [
+                  "Failed",
+                  "TimedOut"
+                ]
+              },
+              "type": "Response"
+            },
+            "response-success": {
+              "inputs": {
+                "body": {},
+                "statusCode": 200
+              },
+              "kind": "Http",
+              "operationOptions": "Asynchronous",
+              "runAfter": {
+                "for-each-object": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Response"
+            },
+            "root-directory": {
+              "inputs": [
+                {
+                  "isDirectory": "true",
+                  "name": "@{triggerBody()['path']}"
+                }
+              ],
+              "runAfter": {
+                "emptySet": [
+                  "Succeeded"
+                ]
+              },
+              "type": "Compose"
+            },
+            "upn": {
+              "inputs": "@coalesce(triggerBody()?['upn'], false)",
+              "runAfter": {},
+              "type": "Compose"
+            }
+          },
+          "contentVersion": "1.0.0.0",
+          "outputs": {},
+          "parameters": {},
+          "triggers": {
+            "manual": {
+              "inputs": {
+                "schema": {
+                  "properties": {
+                    "ace": {
+                      "properties": {
+                        "blobPermissions": {
+                          "type": "string"
+                        },
+                        "directoryPermissions": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        },
+                        "type": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "id"
+                      ],
+                      "type": "object"
+                    },
+                    "container": {
+                      "type": "string"
+                    },
+                    "isDefault": {
+                      "type": "boolean"
+                    },
+                    "isRecursive": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "storageAccount": {
+                      "type": "string"
+                    },
+                    "suffix": {
+                      "type": "string"
+                    },
+                    "upn": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "storageAccount",
+                    "container",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "kind": "Http",
+              "operationOptions": "EnableSchemaValidation",
+              "type": "Request"
+            }
+          }
         },
         "parameters": {}
       }
